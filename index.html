@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TARS x Myles Task Bridge</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--muted:#98a2c7;--text:#ecf0ff;--accent:#6aa8ff;--ok:#3ddc97;--warn:#ffb020}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#0b1020,#0e1430);color:var(--text)}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    h1{font-size:1.25rem;margin:0 0 6px} .sub{color:var(--muted);margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px} @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid #2a355f;border-radius:14px;padding:14px}
+    .row{display:flex;gap:8px;flex-wrap:wrap} input,textarea,select,button{border-radius:10px;border:1px solid #314072;background:#0f1733;color:var(--text);padding:10px}
+    input,textarea,select{width:100%} textarea{min-height:84px;resize:vertical}
+    button{cursor:pointer;background:#1a2753} button:hover{filter:brightness(1.1)} .primary{background:#2557d6;border-color:#3f71ee}
+    .task{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px;border:1px solid #33457d;border-radius:10px;margin-top:8px}
+    .meta{font-size:.8rem;color:var(--muted)} .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.75rem}
+    .todo{background:#2d3a64}.doing{background:#5f460f}.done{background:#174d37}
+    .msg{padding:10px;border:1px solid #35477f;border-radius:10px;margin-top:8px}
+    .me{border-color:#3a6bd1}.tars{border-color:#2f8f67}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:var(--muted);font-size:.85rem}
+    .tiny{font-size:.75rem;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🤖 TARS x Myles — Task Bridge</h1>
+    <div class="sub">Lightweight shared board: track tasks + leave notes for each other. Data saves in your browser (localStorage).</div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Tasks</h2>
+        <div class="row">
+          <input id="taskTitle" placeholder="Task title (e.g., Test risklo results)" />
+          <select id="taskStatus">
+            <option value="todo">To Do</option>
+            <option value="doing">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+          <input id="taskDue" placeholder="Due (optional, ET)" />
+          <button class="primary" id="addTask">Add Task</button>
+        </div>
+        <div id="tasks"></div>
+      </section>
+
+      <section class="card">
+        <h2>Notes / Handoff</h2>
+        <div class="row">
+          <select id="author">
+            <option value="Myles">Myles</option>
+            <option value="TARS">TARS</option>
+          </select>
+          <textarea id="noteText" placeholder="Drop updates, blockers, or instructions..."></textarea>
+          <button class="primary" id="addNote">Post Note</button>
+        </div>
+        <div id="notes"></div>
+        <div class="footer">
+          <div class="tiny">Tip: Export JSON and send it to me if you want me to parse your latest board state.</div>
+          <div class="row">
+            <button id="exportBtn">Export</button>
+            <button id="clearBtn">Clear</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+const KEY='tars-task-bridge-v1';
+const state=JSON.parse(localStorage.getItem(KEY)||'{"tasks":[],"notes":[]}');
+const $=s=>document.querySelector(s);
+const fmt=t=>new Date(t).toLocaleString();
+function save(){localStorage.setItem(KEY,JSON.stringify(state));render();}
+function esc(s){return (s||'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
+function render(){
+  $('#tasks').innerHTML=state.tasks.map((t,i)=>`<div class="task"><div><strong>${esc(t.title)}</strong><div class="meta">Due: ${esc(t.due||'—')} • Added ${fmt(t.ts)}</div></div><div><span class="pill ${t.status}">${t.status.toUpperCase()}</span><div class="row" style="margin-top:6px"><button onclick="cycle(${i})">Next</button><button onclick="delTask(${i})">Delete</button></div></div></div>`).join('')||'<p class="tiny">No tasks yet.</p>';
+  $('#notes').innerHTML=state.notes.slice().reverse().map(n=>`<div class="msg ${n.author==='TARS'?'tars':'me'}"><strong>${esc(n.author)}</strong><div>${esc(n.text)}</div><div class="meta">${fmt(n.ts)}</div></div>`).join('')||'<p class="tiny">No notes yet.</p>';
+}
+window.cycle=(i)=>{const order=['todo','doing','done'];const x=state.tasks[i];x.status=order[(order.indexOf(x.status)+1)%3];save();}
+window.delTask=(i)=>{state.tasks.splice(i,1);save();}
+$('#addTask').onclick=()=>{const title=$('#taskTitle').value.trim();if(!title)return;state.tasks.push({title,status:$('#taskStatus').value,due:$('#taskDue').value.trim(),ts:Date.now()});$('#taskTitle').value='';$('#taskDue').value='';save();}
+$('#addNote').onclick=()=>{const text=$('#noteText').value.trim();if(!text)return;state.notes.push({author:$('#author').value,text,ts:Date.now()});$('#noteText').value='';save();}
+$('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='task-bridge.json';a.click();URL.revokeObjectURL(a.href);}
+$('#clearBtn').onclick=()=>{if(confirm('Clear all tasks and notes?')){state.tasks=[];state.notes=[];save();}}
+render();
+</script>
+</body>
+</html>
